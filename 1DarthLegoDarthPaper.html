@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>Leo's Opening Crawl</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<section class="intro">
+  A long time ago, on a spaceship called the PaperBrick....
+</section>
+
+<section class="logo">
+      <img src="img/LeosStories.png">
+</section>
+
+<!-- Change the text to your liking -->
+<div id="board">  
+  <div id="content">
+    <p id="episode">Episode I</p>
+    <p id="title">TWO DARTHS</p>
+    <br>
+    <!-- And make it cheesy ! -->
+    <p id='textbody'>There were two darths. One was named Darth Lego, for he was a Lego minifigure. The other was named Darth Paper, for he was made of paper. The two darths could not stop fighting. The darths were always fighting to show they were better. So their armies came together to make a plan on how to make them work together.</p> 
+    <p id='textbody'>Their best plan was to make star destroyer blueprints because they both needed new warships. The blueprints were double-sided: one side was the Lego star destroyer, the other side was the paper star destroyer.</p> 
+    <p id='textbody'>When the darths found out about it, instead of making peace, they decided to fight on who would have it. They fought over it until it ripped. The darths worked together to fix it, and for once, they didn't fight. But before they could build it, the potent Darth Later appears. He takes the blueprints, and then disappears....</p>        
+  </div>  
+</div>
+
+
+  <audio id="audio">
+        <source src="https://archive.org/download/StarWarsThemeSongByJohnWilliams/Star Wars Theme Song By John Williams.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+  </audio>
+<script>
+        window.onload = function() {
+            setTimeout(function() {
+                var audio = document.getElementById('audio');
+                audio.play();
+
+                setTimeout(function() {
+                    var fadeAudio = setInterval(function() {
+                        if (audio.volume > 0.1) {
+                            audio.volume -= 0.1;
+                        } else {
+                            audio.volume = 0;
+                            clearInterval(fadeAudio);
+                        }
+                    }, 3000); // Decrease volume every 200ms
+                }, 72000); // Start fading after 10 seconds
+
+            }, 8200); // 5000 milliseconds = 5 seconds
+        };
+    </script>    
+</div>  
+
+<!-- partial -->
+  <script  src="./script.js"></script>
+
+</body>
+</html>
