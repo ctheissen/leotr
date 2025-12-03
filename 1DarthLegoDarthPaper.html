@@ -71,10 +71,13 @@
 
         // Music start coordination:
         // - music only starts the first time LeosStories.png becomes visible
+        // - enforce a minimum delay after page load because CSS shows the logo after ~9s
         // - if the user has explicitly muted when start conditions are reached, mark start as pending
         var musicStarted = false;
         var musicStartPending = false;
         var logoSeen = false;
+        var pageLoadTs = Date.now();
+        var minLogoDelayMs = 9000; // adjust this if your CSS timing differs
 
         // Observe the logo image becoming visible
         var logoImg = document.querySelector('img[src*="LeosStories.png"]');
@@ -82,6 +85,7 @@
             var io = new IntersectionObserver(function(entries) {
                 entries.forEach(function(entry) {
                     if (entry.isIntersecting && !logoSeen) {
+                        // IntersectionObserver can fire before a CSS reveal finishes; record candidate and re-check timing
                         logoSeen = true;
                         io.disconnect();
                         tryStartMusicIfReady();
@@ -90,13 +94,20 @@
             }, { threshold: 0.1 });
             io.observe(logoImg);
         } else {
-            // If selector doesn't match, log a warning — adjust selector if necessary.
             console.warn('LeosStories.png not found; adjust selector if needed');
         }
 
         function tryStartMusicIfReady() {
             if (musicStarted) return;
             if (!logoSeen) return;
+
+            var elapsed = Date.now() - pageLoadTs;
+            if (elapsed < minLogoDelayMs) {
+                // Wait until the CSS animation time has passed; then attempt start again.
+                setTimeout(tryStartMusicIfReady, minLogoDelayMs - elapsed + 50);
+                return;
+            }
+
             // If user explicitly muted, defer start until they unmute
             if (isMuted) {
                 musicStartPending = true;
@@ -108,17 +119,24 @@
         // Ensure audio.muted is set to the canonical isMuted before attempting playback.
         function startMusicNow() {
             if (musicStarted) return;
+            // Do not start before the logo has been shown for the minimum time
+            var elapsed = Date.now() - pageLoadTs;
+            if (!logoSeen || elapsed < minLogoDelayMs) {
+                musicStartPending = true;
+                tryStartMusicIfReady();
+                return;
+            }
+
             musicStartPending = false;
 
             audio.muted = isMuted;
 
-            // Try to play; only mark musicStarted if play succeeds.
             audio.play().then(function() {
                 musicStarted = true;
                 scheduleFadeAfterMusicStart();
             }).catch(function(err) {
-                // Autoplay may be blocked by browser; keep musicStarted false so a later user gesture can start it.
                 console.warn('Autoplay prevented or play failed:', err);
+                // If autoplay was blocked, a user gesture will be required to start playback.
             });
         }
 
@@ -148,33 +166,43 @@
             }, fadeStartAfterMs);
         }
 
-        // Make toggle always update canonical state and apply it immediately
+        // Toggle mute and only start playback on unmute if the logo is visible and min delay has passed
         function toggleMute() {
             isMuted = !isMuted;
             audio.muted = isMuted;
             updateMuteButton();
 
             if (!isMuted) {
-                // user just unmuted — if logo seen, try to start (this is a user gesture)
-                if (logoSeen && !musicStarted) {
+                // user unmuted — if logo is visible and min delay passed, try to start (this is a user gesture)
+                var elapsed = Date.now() - pageLoadTs;
+                if (logoSeen && elapsed >= minLogoDelayMs && !musicStarted) {
                     startMusicNow();
+                } else if (logoSeen && elapsed < minLogoDelayMs) {
+                    // mark pending; when min delay passes, tryStartMusicIfReady will handle it
+                    musicStartPending = true;
                 }
-                // If playback already started but paused, resume
                 if (musicStarted && audio.paused) {
                     audio.play().catch(function() {});
+                }
+            } else {
+                // muted — if music is playing, mute immediately
+                if (musicStarted && !audio.paused) {
+                    audio.muted = true;
                 }
             }
         }
 
         muteBtn.addEventListener('click', toggleMute);
 
-        // If autoplay was blocked, start music on the first user gesture once the logo is visible.
+        // If autoplay was blocked, start music on the first user gesture once the logo is visible and min delay passed.
         function bindUserStartGesture() {
             function onUserGesture() {
-                if (logoSeen && !musicStarted) {
-                    // Respect current mute state when attempting to start
+                var elapsed = Date.now() - pageLoadTs;
+                if (logoSeen && elapsed >= minLogoDelayMs && !musicStarted) {
                     audio.muted = isMuted;
                     startMusicNow();
+                } else if (logoSeen) {
+                    musicStartPending = true;
                 }
                 document.removeEventListener('click', onUserGesture);
                 document.removeEventListener('touchstart', onUserGesture);
