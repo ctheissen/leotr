@@ -50,7 +50,8 @@
         var muteBtn = document.getElementById('muteBtn');
         var volumeOnIcon = document.getElementById('volumeOnIcon');
         var volumeOffIcon = document.getElementById('volumeOffIcon');
-        var isMuted = false;
+        // Default to muted on page load
+        var isMuted = true;
         var fadeInterval = null;
 
         // Show mute icon only when explicitly muted, not when paused
@@ -66,21 +67,23 @@
 
         // Ensure audio initial state reflects isMuted
         audio.muted = isMuted;
+        // Reflect the icon immediately
+        updateMuteButton();
         // Start at full volume unless user changed it elsewhere
         if (typeof audio.volume === 'number') audio.volume = audio.volume || 1;
 
         // Music start coordination:
         // - music only starts the first time LeosStories.png becomes visible
-        // - enforce a minimum delay after page load because CSS shows the logo after ~9s
+        // - enforce a minimum delay after page load because CSS shows the logo after ~8.5s
         // - if the user has explicitly muted when start conditions are reached, mark start as pending
         var musicStarted = false;
         var musicStartPending = false;
         var logoSeen = false;
         var pageLoadTs = Date.now();
-        var minLogoDelayMs = 9000; // adjust this if your CSS timing differs
+        var minLogoDelayMs = 8500; // shortened from 9000 to 8500ms
 
         // Observe the logo image becoming visible
-        var logoImg = document.querySelector('img[src*="LeosStories.png"]');
+        var logoImg = document.querySelector('img[src*=\"LeosStories.png\"]');
         if (logoImg) {
             var io = new IntersectionObserver(function(entries) {
                 entries.forEach(function(entry) {
