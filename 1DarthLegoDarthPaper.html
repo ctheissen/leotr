@@ -33,25 +33,114 @@
         <source src="https://archive.org/download/StarWarsThemeSongByJohnWilliams/Star Wars Theme Song By John Williams.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
   </audio>
+
+  <!-- Mute/Unmute Button -->
+  <button id="muteBtn" class="mute-btn" title="Toggle Music">
+    <svg id="volumeOnIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+    </svg>
+    <svg id="volumeOffIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <line x1="23" y1="9" x2="17" y2="15"></line>
+      <line x1="17" y1="9" x2="23" y2="15"></line>
+    </svg>
+  </button>
+
 <script>
-        window.onload = function() {
+        var audio = document.getElementById('audio');
+        var muteBtn = document.getElementById('muteBtn');
+        var volumeOnIcon = document.getElementById('volumeOnIcon');
+        var volumeOffIcon = document.getElementById('volumeOffIcon');
+        var isMuted = false;
+        var audioStarted = false;
+        var fadeInterval = null;
+
+        function updateMuteButton() {
+            if (isMuted || audio.paused) {
+                volumeOnIcon.style.display = 'none';
+                volumeOffIcon.style.display = 'block';
+            } else {
+                volumeOnIcon.style.display = 'block';
+                volumeOffIcon.style.display = 'none';
+            }
+        }
+
+        function startFadeOut() {
+            // Clear any existing fade interval to prevent multiple timers
+            if (fadeInterval) {
+                clearInterval(fadeInterval);
+            }
+            // Start fading after 72 seconds
             setTimeout(function() {
-                var audio = document.getElementById('audio');
-                audio.play();
+                fadeInterval = setInterval(function() {
+                    if (audio.volume > 0.1) {
+                        audio.volume -= 0.1;
+                    } else {
+                        audio.volume = 0;
+                        clearInterval(fadeInterval);
+                    }
+                }, 3000);
+            }, 72000);
+        }
 
-                setTimeout(function() {
-                    var fadeAudio = setInterval(function() {
-                        if (audio.volume > 0.1) {
-                            audio.volume -= 0.1;
-                        } else {
-                            audio.volume = 0;
-                            clearInterval(fadeAudio);
-                        }
-                    }, 3000); // Decrease volume every 200ms
-                }, 72000); // Start fading after 10 seconds
+        function startAudioWithFade() {
+            if (audioStarted) return;
+            audioStarted = true;
 
-            }, 8200); // 5000 milliseconds = 5 seconds
+            setTimeout(function() {
+                audio.play().then(function() {
+                    updateMuteButton();
+                    startFadeOut();
+                }).catch(function(error) {
+                    console.log('Autoplay blocked, waiting for user interaction');
+                    audioStarted = false;
+                    updateMuteButton();
+                });
+            }, 8200);
+        }
+
+        function toggleMute() {
+            if (!audioStarted) {
+                // First interaction - try to start audio
+                audioStarted = true;
+                audio.play().then(function() {
+                    isMuted = false;
+                    updateMuteButton();
+                    startFadeOut();
+                }).catch(function() {
+                    audioStarted = false;
+                    updateMuteButton();
+                });
+            } else if (audio.paused) {
+                // Resume playing
+                audio.play().then(function() {
+                    isMuted = false;
+                    updateMuteButton();
+                }).catch(function() {
+                    updateMuteButton();
+                });
+            } else {
+                // Pause/mute
+                audio.pause();
+                isMuted = true;
+                updateMuteButton();
+            }
+        }
+
+        muteBtn.addEventListener('click', toggleMute);
+
+        // Try to autoplay on page load
+        window.onload = function() {
+            startAudioWithFade();
         };
+
+        // Also try to start on first user interaction with the page
+        document.addEventListener('click', function() {
+            if (!audioStarted) {
+                startAudioWithFade();
+            }
+        }, { once: true });
     </script>    
 </div>  
 
