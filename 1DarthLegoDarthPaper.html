@@ -40,7 +40,7 @@
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
     </svg>
-    <svg id="volumeOffIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+    <svg id="volumeOffIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
       <line x1="23" y1="9" x2="17" y2="15"></line>
       <line x1="17" y1="9" x2="23" y2="15"></line>
@@ -52,12 +52,13 @@
         var muteBtn = document.getElementById('muteBtn');
         var volumeOnIcon = document.getElementById('volumeOnIcon');
         var volumeOffIcon = document.getElementById('volumeOffIcon');
-        var isMuted = false;
-        var audioStarted = false;
+        // Default to muted on page load
+        var isMuted = true;
         var fadeInterval = null;
 
+        // Show mute icon only when explicitly muted, not when paused
         function updateMuteButton() {
-            if (isMuted || audio.paused) {
+            if (isMuted) {
                 volumeOnIcon.style.display = 'none';
                 volumeOffIcon.style.display = 'block';
             } else {
@@ -66,81 +67,160 @@
             }
         }
 
-        function startFadeOut() {
-            // Clear any existing fade interval to prevent multiple timers
+        // Ensure audio initial state reflects isMuted
+        audio.muted = isMuted;
+        // Reflect the icon immediately
+        updateMuteButton();
+        // Start at full volume unless user changed it elsewhere
+        if (typeof audio.volume === 'number') audio.volume = audio.volume || 1;
+
+        // Music start coordination:
+        // - music only starts the first time LeosStories.png becomes visible
+        // - enforce a minimum delay after page load because CSS shows the logo after ~8.5s
+        // - if the user has explicitly muted when start conditions are reached, mark start as pending
+        var musicStarted = false;
+        var musicStartPending = false;
+        var logoSeen = false;
+        var pageLoadTs = Date.now();
+        var minLogoDelayMs = 8100; // shortened from 9000 to 8500ms
+
+        // Observe the logo image becoming visible
+        var logoImg = document.querySelector('img[src*=\"LeosStories.png\"]');
+        if (logoImg) {
+            var io = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting && !logoSeen) {
+                        // IntersectionObserver can fire before a CSS reveal finishes; record candidate and re-check timing
+                        logoSeen = true;
+                        io.disconnect();
+                        tryStartMusicIfReady();
+                    }
+                });
+            }, { threshold: 0.1 });
+            io.observe(logoImg);
+        } else {
+            console.warn('LeosStories.png not found; adjust selector if needed');
+        }
+
+        function tryStartMusicIfReady() {
+            if (musicStarted) return;
+            if (!logoSeen) return;
+
+            var elapsed = Date.now() - pageLoadTs;
+            if (elapsed < minLogoDelayMs) {
+                // Wait until the CSS animation time has passed; then attempt start again.
+                setTimeout(tryStartMusicIfReady, minLogoDelayMs - elapsed + 50);
+                return;
+            }
+
+            // If user explicitly muted, defer start until they unmute
+            if (isMuted) {
+                musicStartPending = true;
+                return;
+            }
+            startMusicNow();
+        }
+
+        // Ensure audio.muted is set to the canonical isMuted before attempting playback.
+        function startMusicNow() {
+            if (musicStarted) return;
+            // Do not start before the logo has been shown for the minimum time
+            var elapsed = Date.now() - pageLoadTs;
+            if (!logoSeen || elapsed < minLogoDelayMs) {
+                musicStartPending = true;
+                tryStartMusicIfReady();
+                return;
+            }
+
+            musicStartPending = false;
+
+            audio.muted = isMuted;
+
+            audio.play().then(function() {
+                musicStarted = true;
+                scheduleFadeAfterMusicStart();
+            }).catch(function(err) {
+                console.warn('Autoplay prevented or play failed:', err);
+                // If autoplay was blocked, a user gesture will be required to start playback.
+            });
+        }
+
+        function scheduleFadeAfterMusicStart() {
+            // Fade over ~60s (20 steps @ 3s) starting 72s after music starts.
+            var fadeStartAfterMs = 72000;
+            var fadeSteps = 20;
+            var fadeStepDuration = 3000; // 3 seconds
+            var decayFactor = 0.85;
+            var currentStep = 0;
+
+            // Clear any prior fade interval
             if (fadeInterval) {
                 clearInterval(fadeInterval);
             }
-            // Start fading after 72 seconds
+
             setTimeout(function() {
                 fadeInterval = setInterval(function() {
-                    if (audio.volume > 0.1) {
-                        audio.volume -= 0.1;
-                    } else {
+                    currentStep++;
+                    // Multiply current volume by decay factor so the fade adapts to user volume changes
+                    audio.volume = Math.max(0, audio.volume * decayFactor);
+                    if (currentStep >= fadeSteps) {
                         audio.volume = 0;
                         clearInterval(fadeInterval);
                     }
-                }, 3000);
-            }, 72000);
+                }, fadeStepDuration);
+            }, fadeStartAfterMs);
         }
 
-        function startAudioWithFade() {
-            if (audioStarted) return;
-            audioStarted = true;
-
-            setTimeout(function() {
-                audio.play().then(function() {
-                    updateMuteButton();
-                    startFadeOut();
-                }).catch(function(error) {
-                    console.log('Autoplay blocked, waiting for user interaction');
-                    audioStarted = false;
-                    updateMuteButton();
-                });
-            }, 8200);
-        }
-
+        // Toggle mute and only start playback on unmute if the logo is visible and min delay has passed
         function toggleMute() {
-            if (!audioStarted) {
-                // First interaction - try to start audio
-                audioStarted = true;
-                audio.play().then(function() {
-                    isMuted = false;
-                    updateMuteButton();
-                    startFadeOut();
-                }).catch(function() {
-                    audioStarted = false;
-                    updateMuteButton();
-                });
-            } else if (audio.paused) {
-                // Resume playing
-                audio.play().then(function() {
-                    isMuted = false;
-                    updateMuteButton();
-                }).catch(function() {
-                    updateMuteButton();
-                });
+            isMuted = !isMuted;
+            audio.muted = isMuted;
+            updateMuteButton();
+
+            if (!isMuted) {
+                // user unmuted — if logo is visible and min delay passed, try to start (this is a user gesture)
+                var elapsed = Date.now() - pageLoadTs;
+                if (logoSeen && elapsed >= minLogoDelayMs && !musicStarted) {
+                    startMusicNow();
+                } else if (logoSeen && elapsed < minLogoDelayMs) {
+                    // mark pending; when min delay passes, tryStartMusicIfReady will handle it
+                    musicStartPending = true;
+                }
+                if (musicStarted && audio.paused) {
+                    audio.play().catch(function() {});
+                }
             } else {
-                // Pause/mute
-                audio.pause();
-                isMuted = true;
-                updateMuteButton();
+                // muted — if music is playing, mute immediately
+                if (musicStarted && !audio.paused) {
+                    audio.muted = true;
+                }
             }
         }
 
         muteBtn.addEventListener('click', toggleMute);
 
-        // Try to autoplay on page load
-        window.onload = function() {
-            startAudioWithFade();
-        };
-
-        // Also try to start on first user interaction with the page
-        document.addEventListener('click', function() {
-            if (!audioStarted) {
-                startAudioWithFade();
+        // If autoplay was blocked, start music on the first user gesture once the logo is visible and min delay passed.
+        function bindUserStartGesture() {
+            function onUserGesture() {
+                var elapsed = Date.now() - pageLoadTs;
+                if (logoSeen && elapsed >= minLogoDelayMs && !musicStarted) {
+                    audio.muted = isMuted;
+                    startMusicNow();
+                } else if (logoSeen) {
+                    musicStartPending = true;
+                }
+                document.removeEventListener('click', onUserGesture);
+                document.removeEventListener('touchstart', onUserGesture);
             }
-        }, { once: true });
+            document.addEventListener('click', onUserGesture, { once: true });
+            document.addEventListener('touchstart', onUserGesture, { once: true });
+        }
+
+        bindUserStartGesture();
+
+        // Ensure icons reflect initial state
+        document.addEventListener('DOMContentLoaded', updateMuteButton);
+
     </script>    
 </div>  
 
