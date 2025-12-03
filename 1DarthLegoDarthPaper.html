@@ -105,9 +105,12 @@
             startMusicNow();
         }
 
+        // Ensure audio.muted is set to the canonical isMuted before attempting playback.
         function startMusicNow() {
             if (musicStarted) return;
             musicStartPending = false;
+
+            audio.muted = isMuted;
 
             // Try to play; only mark musicStarted if play succeeds.
             audio.play().then(function() {
@@ -120,7 +123,7 @@
         }
 
         function scheduleFadeAfterMusicStart() {
-            // Fade over ~60s (20 steps @ 3s) starting 72s after music actually starts.
+            // Fade over ~60s (20 steps @ 3s) starting 72s after music starts.
             var fadeStartAfterMs = 72000;
             var fadeSteps = 20;
             var fadeStepDuration = 3000; // 3 seconds
@@ -145,18 +148,18 @@
             }, fadeStartAfterMs);
         }
 
-        // Mute toggle: do not start the music just by toggling mute unless the logo has been seen
+        // Make toggle always update canonical state and apply it immediately
         function toggleMute() {
             isMuted = !isMuted;
             audio.muted = isMuted;
             updateMuteButton();
 
             if (!isMuted) {
-                // If the logo is already visible, try to start playback immediately (this is a user gesture)
-                if (logoSeen) {
+                // user just unmuted — if logo seen, try to start (this is a user gesture)
+                if (logoSeen && !musicStarted) {
                     startMusicNow();
                 }
-                // If music already started but playback was paused for other reasons, attempt to resume.
+                // If playback already started but paused, resume
                 if (musicStarted && audio.paused) {
                     audio.play().catch(function() {});
                 }
@@ -164,6 +167,23 @@
         }
 
         muteBtn.addEventListener('click', toggleMute);
+
+        // If autoplay was blocked, start music on the first user gesture once the logo is visible.
+        function bindUserStartGesture() {
+            function onUserGesture() {
+                if (logoSeen && !musicStarted) {
+                    // Respect current mute state when attempting to start
+                    audio.muted = isMuted;
+                    startMusicNow();
+                }
+                document.removeEventListener('click', onUserGesture);
+                document.removeEventListener('touchstart', onUserGesture);
+            }
+            document.addEventListener('click', onUserGesture, { once: true });
+            document.addEventListener('touchstart', onUserGesture, { once: true });
+        }
+
+        bindUserStartGesture();
 
         // Ensure icons reflect initial state
         document.addEventListener('DOMContentLoaded', updateMuteButton);
