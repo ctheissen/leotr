@@ -22,7 +22,7 @@
     <p id="title">TWO DARTHS</p>
     <br>
     <!-- And make it cheesy ! -->
-    <p id='textbody'>There were two darths. One was named Darth Lego, for he was a Lego minifigure. The other was named Darth Paper, for he was made of paper. The two darths could not stop fightin[...]<p id='textbody'>Their best plan was to make star destroyer blueprints because they both needed new warships. The blueprints were double-sided: one side was the Lego star destroyer, the other [...]<p id='textbody'>When the darths found out about it, instead of making peace, they decided to fight on who would have it. They fought over it until it ripped. The darths worked together to fix[...]  
+    <p id='textbody'>There were two darths. One was named Darth Lego, for he was a Lego minifigure. The other was named Darth Paper, for he was made of paper. The two darths could not stop fightin[...]</p>
   </div>  
 </div>
 
@@ -70,20 +70,11 @@
         if (typeof audio.volume === 'number') audio.volume = audio.volume || 1;
 
         // Music start coordination:
-        // - initialDelayMs: keep the original "no music after page load" amount (72s)
         // - music only starts the first time LeosStories.png becomes visible
         // - if the user has explicitly muted when start conditions are reached, mark start as pending
         var musicStarted = false;
         var musicStartPending = false;
-        var initialDelayMs = 72000;
-        var initialDelayElapsed = false;
         var logoSeen = false;
-
-        // Mark initial delay elapsed after initialDelayMs
-        setTimeout(function() {
-            initialDelayElapsed = true;
-            tryStartMusicIfReady();
-        }, initialDelayMs);
 
         // Observe the logo image becoming visible
         var logoImg = document.querySelector('img[src*="LeosStories.png"]');
@@ -105,7 +96,7 @@
 
         function tryStartMusicIfReady() {
             if (musicStarted) return;
-            if (!initialDelayElapsed || !logoSeen) return;
+            if (!logoSeen) return;
             // If user explicitly muted, defer start until they unmute
             if (isMuted) {
                 musicStartPending = true;
@@ -116,15 +107,16 @@
 
         function startMusicNow() {
             if (musicStarted) return;
-            musicStarted = true;
             musicStartPending = false;
 
-            audio.play().catch(function(err) {
-                // Autoplay may be blocked by browser; if blocked audio will remain paused.
+            // Try to play; only mark musicStarted if play succeeds.
+            audio.play().then(function() {
+                musicStarted = true;
+                scheduleFadeAfterMusicStart();
+            }).catch(function(err) {
+                // Autoplay may be blocked by browser; keep musicStarted false so a later user gesture can start it.
                 console.warn('Autoplay prevented or play failed:', err);
             });
-
-            scheduleFadeAfterMusicStart();
         }
 
         function scheduleFadeAfterMusicStart() {
@@ -153,19 +145,18 @@
             }, fadeStartAfterMs);
         }
 
-        // Mute toggle: do not start the music just by toggling mute unless the start conditions are already met
+        // Mute toggle: do not start the music just by toggling mute unless the logo has been seen
         function toggleMute() {
             isMuted = !isMuted;
             audio.muted = isMuted;
             updateMuteButton();
 
             if (!isMuted) {
-                // If music start was pending (the start conditions were reached while muted),
-                // begin playback now.
-                if (musicStartPending && !musicStarted && initialDelayElapsed && logoSeen) {
+                // If the logo is already visible, try to start playback immediately (this is a user gesture)
+                if (logoSeen) {
                     startMusicNow();
                 }
-                // If music already started but playback was paused for other reasons, attempt to play.
+                // If music already started but playback was paused for other reasons, attempt to resume.
                 if (musicStarted && audio.paused) {
                     audio.play().catch(function() {});
                 }
@@ -173,6 +164,9 @@
         }
 
         muteBtn.addEventListener('click', toggleMute);
+
+        // Ensure icons reflect initial state
+        document.addEventListener('DOMContentLoaded', updateMuteButton);
 
     </script>    
 </div>  
