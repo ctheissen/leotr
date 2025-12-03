@@ -22,9 +22,7 @@
     <p id="title">TWO DARTHS</p>
     <br>
     <!-- And make it cheesy ! -->
-    <p id='textbody'>There were two darths. One was named Darth Lego, for he was a Lego minifigure. The other was named Darth Paper, for he was made of paper. The two darths could not stop fighting. The darths were always fighting to show they were better. So their armies came together to make a plan on how to make them work together.</p> 
-    <p id='textbody'>Their best plan was to make star destroyer blueprints because they both needed new warships. The blueprints were double-sided: one side was the Lego star destroyer, the other side was the paper star destroyer.</p> 
-    <p id='textbody'>When the darths found out about it, instead of making peace, they decided to fight on who would have it. They fought over it until it ripped. The darths worked together to fix it, and for once, they didn't fight. But before they could build it, the potent Darth Later appears. He takes the blueprints, and then disappears....</p>        
+    <p id='textbody'>There were two darths. One was named Darth Lego, for he was a Lego minifigure. The other was named Darth Paper, for he was made of paper. The two darths could not stop fightin[...]<p id='textbody'>Their best plan was to make star destroyer blueprints because they both needed new warships. The blueprints were double-sided: one side was the Lego star destroyer, the other [...]<p id='textbody'>When the darths found out about it, instead of making peace, they decided to fight on who would have it. They fought over it until it ripped. The darths worked together to fix[...]  
   </div>  
 </div>
 
@@ -40,7 +38,7 @@
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
     </svg>
-    <svg id="volumeOffIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+    <svg id="volumeOffIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
       <line x1="23" y1="9" x2="17" y2="15"></line>
       <line x1="17" y1="9" x2="23" y2="15"></line>
@@ -53,11 +51,10 @@
         var volumeOnIcon = document.getElementById('volumeOnIcon');
         var volumeOffIcon = document.getElementById('volumeOffIcon');
         var isMuted = false;
-        var audioStarted = false;
         var fadeInterval = null;
 
+        // Show mute icon only when explicitly muted, not when paused
         function updateMuteButton() {
-            // Show mute icon only when explicitly muted, not when paused
             if (isMuted) {
                 volumeOnIcon.style.display = 'none';
                 volumeOffIcon.style.display = 'block';
@@ -67,93 +64,116 @@
             }
         }
 
-        function startFadeOut() {
-            // Clear any existing fade interval to prevent multiple timers
+        // Ensure audio initial state reflects isMuted
+        audio.muted = isMuted;
+        // Start at full volume unless user changed it elsewhere
+        if (typeof audio.volume === 'number') audio.volume = audio.volume || 1;
+
+        // Music start coordination:
+        // - initialDelayMs: keep the original "no music after page load" amount (72s)
+        // - music only starts the first time LeosStories.png becomes visible
+        // - if the user has explicitly muted when start conditions are reached, mark start as pending
+        var musicStarted = false;
+        var musicStartPending = false;
+        var initialDelayMs = 72000;
+        var initialDelayElapsed = false;
+        var logoSeen = false;
+
+        // Mark initial delay elapsed after initialDelayMs
+        setTimeout(function() {
+            initialDelayElapsed = true;
+            tryStartMusicIfReady();
+        }, initialDelayMs);
+
+        // Observe the logo image becoming visible
+        var logoImg = document.querySelector('img[src*="LeosStories.png"]');
+        if (logoImg) {
+            var io = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting && !logoSeen) {
+                        logoSeen = true;
+                        io.disconnect();
+                        tryStartMusicIfReady();
+                    }
+                });
+            }, { threshold: 0.1 });
+            io.observe(logoImg);
+        } else {
+            // If selector doesn't match, log a warning — adjust selector if necessary.
+            console.warn('LeosStories.png not found; adjust selector if needed');
+        }
+
+        function tryStartMusicIfReady() {
+            if (musicStarted) return;
+            if (!initialDelayElapsed || !logoSeen) return;
+            // If user explicitly muted, defer start until they unmute
+            if (isMuted) {
+                musicStartPending = true;
+                return;
+            }
+            startMusicNow();
+        }
+
+        function startMusicNow() {
+            if (musicStarted) return;
+            musicStarted = true;
+            musicStartPending = false;
+
+            audio.play().catch(function(err) {
+                // Autoplay may be blocked by browser; if blocked audio will remain paused.
+                console.warn('Autoplay prevented or play failed:', err);
+            });
+
+            scheduleFadeAfterMusicStart();
+        }
+
+        function scheduleFadeAfterMusicStart() {
+            // Fade over ~60s (20 steps @ 3s) starting 72s after music actually starts.
+            var fadeStartAfterMs = 72000;
+            var fadeSteps = 20;
+            var fadeStepDuration = 3000; // 3 seconds
+            var decayFactor = 0.85;
+            var currentStep = 0;
+
+            // Clear any prior fade interval
             if (fadeInterval) {
                 clearInterval(fadeInterval);
             }
-            // Start fading after 72 seconds
-            // Fade over 60 seconds: 20 steps at 3 seconds each
-            // Uses current audio.volume so it continues smoothly if user changed volume
+
             setTimeout(function() {
-                var fadeSteps = 20;
-                var fadeStepDuration = 3000; // 3 seconds per step
-                var currentStep = 0;
-                // Exponential decay factor: volume reduces by 15% each step
-                // After 20 steps, volume will be at ~4% before final step sets it to 0
-                var decayFactor = 0.85;
-                
                 fadeInterval = setInterval(function() {
                     currentStep++;
-                    // Multiply current volume by decay factor
-                    // This adapts to any volume changes made by user
+                    // Multiply current volume by decay factor so the fade adapts to user volume changes
                     audio.volume = Math.max(0, audio.volume * decayFactor);
-                    // On final step, set to 0 and stop
                     if (currentStep >= fadeSteps) {
                         audio.volume = 0;
                         clearInterval(fadeInterval);
                     }
                 }, fadeStepDuration);
-            }, 72000);
+            }, fadeStartAfterMs);
         }
 
-        function startAudioWithFade() {
-            if (audioStarted) return;
-            audioStarted = true;
-
-            setTimeout(function() {
-                audio.play().then(function() {
-                    updateMuteButton();
-                    startFadeOut();
-                }).catch(function(error) {
-                    console.log('Autoplay blocked, waiting for user interaction');
-                    audioStarted = false;
-                    updateMuteButton();
-                });
-            }, 8200);
-        }
-
+        // Mute toggle: do not start the music just by toggling mute unless the start conditions are already met
         function toggleMute() {
-            if (!audioStarted) {
-                // First interaction - try to start audio
-                audioStarted = true;
-                audio.play().then(function() {
-                    isMuted = false;
-                    updateMuteButton();
-                    startFadeOut();
-                }).catch(function() {
-                    audioStarted = false;
-                    updateMuteButton();
-                });
-            } else if (audio.paused) {
-                // Resume playing
-                audio.play().then(function() {
-                    isMuted = false;
-                    updateMuteButton();
-                }).catch(function() {
-                    updateMuteButton();
-                });
-            } else {
-                // Pause/mute
-                audio.pause();
-                isMuted = true;
-                updateMuteButton();
+            isMuted = !isMuted;
+            audio.muted = isMuted;
+            updateMuteButton();
+
+            if (!isMuted) {
+                // If music start was pending (the start conditions were reached while muted),
+                // begin playback now.
+                if (musicStartPending && !musicStarted && initialDelayElapsed && logoSeen) {
+                    startMusicNow();
+                }
+                // If music already started but playback was paused for other reasons, attempt to play.
+                if (musicStarted && audio.paused) {
+                    audio.play().catch(function() {});
+                }
             }
         }
 
         muteBtn.addEventListener('click', toggleMute);
 
-        // Try to autoplay on page load
-        window.onload = function() {
-            startAudioWithFade();
-        };
-
-        // Also try to start on first user interaction with the page
-        document.addEventListener('click', function() {
-            if (!audioStarted) {
-                startAudioWithFade();
-            }
-        }, { once: true });
     </script>    
 </div>  
 
