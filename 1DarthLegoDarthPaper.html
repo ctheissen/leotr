@@ -57,7 +57,8 @@
         var fadeInterval = null;
 
         function updateMuteButton() {
-            if (isMuted || audio.paused) {
+            // Show mute icon only when explicitly muted, not when paused
+            if (isMuted) {
                 volumeOnIcon.style.display = 'none';
                 volumeOffIcon.style.display = 'block';
             } else {
@@ -72,15 +73,27 @@
                 clearInterval(fadeInterval);
             }
             // Start fading after 72 seconds
+            // Fade over 60 seconds: 20 steps at 3 seconds each
+            // Uses current audio.volume so it continues smoothly if user changed volume
             setTimeout(function() {
+                var fadeSteps = 20;
+                var fadeStepDuration = 3000; // 3 seconds per step
+                var currentStep = 0;
+                // Exponential decay factor: volume reduces by 15% each step
+                // After 20 steps, volume will be at ~4% before final step sets it to 0
+                var decayFactor = 0.85;
+                
                 fadeInterval = setInterval(function() {
-                    if (audio.volume > 0.1) {
-                        audio.volume -= 0.1;
-                    } else {
+                    currentStep++;
+                    // Multiply current volume by decay factor
+                    // This adapts to any volume changes made by user
+                    audio.volume = Math.max(0, audio.volume * decayFactor);
+                    // On final step, set to 0 and stop
+                    if (currentStep >= fadeSteps) {
                         audio.volume = 0;
                         clearInterval(fadeInterval);
                     }
-                }, 3000);
+                }, fadeStepDuration);
             }, 72000);
         }
 
